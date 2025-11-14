@@ -1,57 +1,48 @@
-import React, { useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import { Image } from 'expo-image';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { chats, getMessagesForChat, users } from '@/mock/data';
+import { Image } from 'expo-image';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
-// Mock messages data
-const mockMessages = [
-  {
-    id: '1',
-    text: 'Hey! How are you doing?',
-    sender: 'other',
-    timestamp: '2:30 PM',
-    isRead: true,
-  },
-  {
-    id: '2',
-    text: 'I\'m doing great! Just working on some new projects. How about you?',
-    sender: 'me',
-    timestamp: '2:31 PM',
-    isRead: true,
-  },
-  {
-    id: '3',
-    text: 'That sounds exciting! I\'ve been learning React Native and building some cool mobile apps.',
-    sender: 'other',
-    timestamp: '2:32 PM',
-    isRead: true,
-  },
-  {
-    id: '4',
-    text: 'Wow, that\'s awesome! I\'d love to see what you\'ve built sometime.',
-    sender: 'me',
-    timestamp: '2:33 PM',
-    isRead: false,
-  },
-];
+type FormattedMessage = {
+  id: string;
+  text: string;
+  sender: 'me' | 'other';
+  timestamp: string;
+  isRead: boolean;
+};
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams();
   const colorScheme = useColorScheme();
   const [messageText, setMessageText] = useState('');
-  const [messages, setMessages] = useState(mockMessages);
+  const [messages, setMessages] = useState(getMessagesForChat(String(id)));
+
+  // Get chat info for header
+  const chat = useMemo(() => {
+    return chats.find(c => c.id === String(id));
+  }, [id]);
+
+  // Get user info for private chats
+  const chatUser = useMemo(() => {
+    if (chat?.type === 'private' && chat.members && chat.members.length > 0) {
+      return users.find(u => u.id === chat.members![0]);
+    }
+    return null;
+  }, [chat]);
 
   const sendMessage = () => {
     if (messageText.trim()) {
       const newMessage = {
         id: Date.now().toString(),
+        chatId: String(id),
+        senderId: 'me',
         text: messageText.trim(),
-        sender: 'me' as const,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toISOString(),
         isRead: false,
       };
       setMessages([...messages, newMessage]);
@@ -59,7 +50,16 @@ export default function ChatScreen() {
     }
   };
 
-  const MessageBubble = ({ message }: { message: typeof mockMessages[0] }) => (
+  // Convert messages to the format expected by MessageBubble
+  const formattedMessages = messages.map(msg => ({
+    id: msg.id,
+    text: msg.text,
+    sender: msg.senderId === 'me' ? 'me' : 'other' as 'me' | 'other',
+    timestamp: new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    isRead: msg.isRead ?? false,
+  }));
+
+  const MessageBubble = ({ message }: { message: FormattedMessage }) => (
     <View style={[
       styles.messageContainer,
       message.sender === 'me' ? styles.myMessageContainer : styles.otherMessageContainer
@@ -111,15 +111,15 @@ export default function ChatScreen() {
         
         <View style={styles.headerContent}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/40' }}
+            source={{ uri: chat?.avatar || 'https://via.placeholder.com/40' }}
             style={styles.headerAvatar}
           />
           <View style={styles.headerText}>
             <ThemedText type="defaultSemiBold" style={styles.headerName}>
-              John Doe
+              {chat?.title || 'Unknown'}
             </ThemedText>
             <ThemedText style={styles.headerStatus}>
-              online
+              {chatUser?.isOnline ? 'online' : 'offline'}
             </ThemedText>
           </View>
         </View>
@@ -143,7 +143,7 @@ export default function ChatScreen() {
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContent}
         >
-          {messages.map((message) => (
+          {formattedMessages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
         </ScrollView>

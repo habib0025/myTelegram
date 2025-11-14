@@ -1,66 +1,43 @@
-import React, { useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, View, TextInput } from 'react-native';
-import { Image } from 'expo-image';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { chats as chatData, getLastMessageForChat, getUnreadCount, users } from '@/mock/data';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
+import React, { useState } from 'react';
+import { ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
-// Mock data for chat list
-const mockChats = [
-  {
-    id: '1',
-    name: 'John Doe',
-    lastMessage: 'Hey, how are you doing?',
-    timestamp: '2:30 PM',
-    unreadCount: 2,
-    avatar: 'https://via.placeholder.com/50',
-    isOnline: true,
-  },
-  {
-    id: '2',
-    name: 'Alice Smith',
-    lastMessage: 'Can we meet tomorrow?',
-    timestamp: '1:45 PM',
-    unreadCount: 0,
-    avatar: 'https://via.placeholder.com/50',
-    isOnline: false,
-  },
-  {
-    id: '3',
-    name: 'Tech Group',
-    lastMessage: 'Great presentation everyone!',
-    timestamp: '12:20 PM',
-    unreadCount: 5,
-    avatar: 'https://via.placeholder.com/50',
-    isOnline: false,
-  },
-  {
-    id: '4',
-    name: 'Mom',
-    lastMessage: 'Don\'t forget dinner tonight',
-    timestamp: '11:30 AM',
-    unreadCount: 0,
-    avatar: 'https://via.placeholder.com/50',
-    isOnline: true,
-  },
-  {
-    id: '5',
-    name: 'Work Team',
-    lastMessage: 'Meeting at 3 PM',
-    timestamp: 'Yesterday',
-    unreadCount: 1,
-    avatar: 'https://via.placeholder.com/50',
-    isOnline: false,
-  },
-];
+type ChatItemType = ReturnType<typeof mapChat>[0];
+
+function mapChat() {
+  return chatData.map(c => {
+    const last = getLastMessageForChat(c.id);
+    // Find user for private chats to check online status
+    let isOnline = false;
+    if (c.type === 'private' && c.members && c.members.length > 0) {
+      const user = users.find(u => u.id === c.members![0]);
+      isOnline = user?.isOnline ?? false;
+    }
+    
+    return {
+      id: c.id,
+      name: c.title,
+      lastMessage: last?.text ?? 'No messages yet',
+      timestamp: last ? new Date(last.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+      unreadCount: getUnreadCount(c.id),
+      avatar: c.avatar,
+      isOnline,
+    };
+  });
+}
 
 export default function ChatsScreen() {
   const colorScheme = useColorScheme();
   const [searchQuery, setSearchQuery] = useState('');
+  const [items, setItems] = useState(mapChat());
 
-  const ChatItem = ({ chat }: { chat: typeof mockChats[0] }) => (
+  const ChatItem = ({ chat }: { chat: ChatItemType }) => (
     <TouchableOpacity 
       style={styles.chatItem}
       onPress={() => router.push(`/chat/${chat.id}`)}
@@ -139,9 +116,11 @@ export default function ChatsScreen() {
 
       {/* Chat List */}
       <ScrollView style={styles.chatList}>
-        {mockChats.map((chat) => (
-          <ChatItem key={chat.id} chat={chat} />
-        ))}
+        {items
+          .filter(c => c.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+          .map((chat) => (
+            <ChatItem key={chat.id} chat={chat} />
+          ))}
       </ScrollView>
     </ThemedView>
   );
